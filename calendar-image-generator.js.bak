@@ -1,0 +1,444 @@
+const path = require('path');
+const fs = require('fs');
+const p5Middleware = require('./p5.js');
+
+/**
+ * Generates a calendar image using p5.js
+ * @param {Array} events - Array of calendar events with startDate, endDate, summary
+ * @param {string} outputDir - Directory to save the image (default: __dirname)
+ * @returns {Promise<string>} Path to the generated image file
+ */
+async function generateCalendarImage(events, outputDir = __dirname) {
+  return new Promise((resolve, reject) => {
+    console.log('[calendar-image-generator] Starting image generation...');
+    console.log('[calendar-image-generator] Events count:', events.length);
+    
+    // Set a timeout to detect if sketch hangs
+    const timeout = setTimeout(() => {
+      reject(new Error('Image generation timed out after 30 seconds'));
+    }, 30000);
+    
+    const brat = [168, 217, 77];
+    const logoPath = path.join(__dirname, 'logo.png');
+
+    // Convert events to the format that p5.js middleware expects (with getEventsBetweenDates method)
+    const icalParsed = {
+      events: events.map(event => ({
+        dtstart: { value: new Date(event.startDate) },
+        dtend: { value: new Date(event.endDate) },
+        summary: event.summary
+      })),
+      getEventsBetweenDates: function(startDate, endDate, inclusive) {
+        return this.events.filter(event => {
+          const eventDate = new Date(event.dtstart.value);
+          return eventDate >= startDate && eventDate <= endDate;
+        });
+      }
+    };
+
+    // Create mock Express request/response/next to use p5.js middleware
+    const mockReq = {
+      icalParsed: icalParsed
+    };
+    
+    const mockRes = {};
+    
+    let imageGenerated = false;
+    const mockNext = () => {
+      // When middleware calls next(), check if image was created
+      setTimeout(() => {
+        const outputPath = path.join(process.cwd(), 'calendar.png');
+        const altPath = path.join(__dirname, 'calendar.png');
+        
+        if (fs.existsSync(outputPath)) {
+          console.log('[calendar-image-generator] Calendar image saved successfully:', outputPath);
+          clearTimeout(timeout);
+          resolve(outputPath);
+        } else if (fs.existsSync(altPath)) {
+          console.log('[calendar-image-generator] Found calendar image at alternative path:', altPath);
+          clearTimeout(timeout);
+          resolve(altPath);
+        } else {
+          // Wait a bit more for file to be written
+          setTimeout(() => {
+            if (fs.existsSync(outputPath)) {
+              console.log('[calendar-image-generator] Calendar image saved successfully (delayed):', outputPath);
+              clearTimeout(timeout);
+              resolve(outputPath);
+            } else if (fs.existsSync(altPath)) {
+              console.log('[calendar-image-generator] Found calendar image at alternative path (delayed):', altPath);
+              clearTimeout(timeout);
+              resolve(altPath);
+            } else {
+              clearTimeout(timeout);
+              reject(new Error('Calendar image was not saved. Checked: ' + outputPath + ' and ' + altPath));
+            }
+          }, 2000);
+        }
+      }, 500);
+    };
+    
+    try {
+      console.log('[calendar-image-generator] Calling p5.js middleware...');
+      p5Middleware(mockReq, mockRes, mockNext);
+      console.log('[calendar-image-generator] Middleware called, waiting for image...');
+    } catch (error) {
+      clearTimeout(timeout);
+      console.error('[calendar-image-generator] Error calling middleware:', error);
+      reject(new Error(`Failed to generate calendar image: ${error.message}`));
+    }
+
+        // Using p5.js middleware directly - all drawing code is in p5.js file
+    // The middleware will call mockNext() when done, which resolves the promise
+  });
+}
+
+module.exports = { generateCalendarImage };
+
+      if (x0 || y0) {
+        p.translate(x0, y0);
+      }
+
+      const leanByDegrees = -25 * (Math.PI / 180);
+      p.rotate(leanByDegrees);
+
+      p.noFill();
+      p.stroke(...spiralBlue);
+      p.strokeWeight(6);
+      p.curve(700, 0, 0, 40, 0, 75, 700, 0);
+      p.curve(-200, 100, 0, 62, 0, 75, -200, 75);
+      p.curve(700, 0, 0, 62, 0, 95, 700, 0);
+      p.curve(200, 85, 0, 85, -70, 122, -10, 122);
+      p.curve(-100, 85, 0, 85, 0, 95, -100, 95);
+      p.curve(-650, 250, -70, 122, -40, 142, -400, 200);
+
+      p.pop();
+      return p;
+    };
+
+    const blob = (c, x0, y0) => {
+      const p = c.createGraphics(960, 960);
+
+      const randomValues = [1.15, 1.25, 1.3];
+
+      if (x0 || y0) {
+        p.translate(x0, y0);
+      }
+
+      p.scale(2);
+
+      const yellow = [255, 215, 51];
+      p.noStroke();
+      p.fill(...yellow);
+      p.beginShape();
+
+      // Control point
+      p.curveVertex(0, 50);
+
+      p.curveVertex(0, 50);
+      p.curveVertex(50, 50);
+      p.curveVertex(100, 50);
+      p.curveVertex(150, 100);
+      p.curveVertex(150, 150);
+      p.curveVertex(100, 200 * p.random(randomValues));
+      p.curveVertex(0, 200);
+      p.curveVertex(-100 * p.random(randomValues), 150);
+      p.curveVertex(-100, 100);
+      p.curveVertex(0, 50);
+
+      // Control point
+      p.curveVertex(0, 50);
+
+      p.endShape(p.CLOSE);
+      return p;
+    };
+
+    const whiteSquiggly = (c, x0, y0) => {
+      const p = c.createGraphics(960, 960);
+
+      if (x0 || y0) {
+        p.translate(x0, y0);
+      }
+
+      p.stroke('white');
+      p.strokeWeight(8);
+      p.noFill();
+      p.curveTightness(-3);
+
+      for (let i = 0; i < 5; i++) {
+        p.curve(50 * i, 150, 50 * i, 0, 50 * (i + 1), 0, 50 * (i + 1), 150);
+      }
+
+      return p;
+    };
+
+    const title = (p, calendar) => {
+      p.push();
+      const now = new Date();
+      const currentMonth = now.toLocaleString('es-MX', { month: 'long' });
+      const titleCenterX = calendar.x + calendar.width / 2;
+      const titleCenterY = calendar.y + 150;
+
+      p.stroke('black');
+      p.fill(0);
+      p.textAlign(p.CENTER);
+      p.textSize(80);
+      p.text(
+        currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1),
+        titleCenterX,
+        titleCenterY
+      );
+
+      const brat = [168, 217, 77];
+      p.stroke(...brat);
+      p.strokeWeight(3);
+      p.fill(...brat);
+      const increment = 1;
+      const yOffset = 20;
+      const xAlignment = 100;
+
+      for (let i = 0; i < (calendar.width * 2) / 3; i += 1) {
+        p.line(
+          (calendar.x + calendar.width - xAlignment) / 3 + i,
+          (titleCenterY + yOffset) * p.random(1, 1.03),
+          (calendar.x + calendar.width - xAlignment) / 3 + i + increment,
+          (titleCenterY + yOffset) * p.random(1, 1.03)
+        );
+      }
+
+      p.pop();
+    };
+
+    const daysGrid = (p, calendar, events) => {
+      p.push();
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const firstDayOfMonth = new Date(now.getFullYear(), currentMonth, 1);
+      const lastDayOfMonth = new Date(now.getFullYear(), currentMonth + 1, 0);
+
+      p.stroke('black');
+      p.fill(0);
+      p.textSize(40);
+
+      const xAlignment = 250;
+      const daysY = calendar.y + 250;
+
+      const weekdayInGrid = firstDayOfMonth.getDay();
+      let day = 1;
+
+      for (let j = 1; j <= 6; j++) {
+        for (let i = j === 1 ? weekdayInGrid - 1 : 0; i < 7; i += 1) {
+          if (i === -1) {
+            i = 6;
+          }
+
+          if (events.some((e) => e.dtstart.value.getDate() === day)) {
+            const xCircleOffset = day < 10 ? 10 : 21;
+            const yCircleOffset = 12;
+            p.push();
+            p.noStroke();
+            p.fill(...brat);
+            p.circle(
+              (calendar.x + calendar.width - xAlignment) / 3 +
+                i * 80 +
+                xCircleOffset,
+              daysY + j * 80 - yCircleOffset,
+              60
+            );
+            p.pop();
+          }
+
+          p.text(
+            day,
+            (calendar.x + calendar.width - xAlignment) / 3 + i * 80,
+            daysY + j * 80
+          );
+
+          if (day < lastDayOfMonth.getDate()) {
+            day++;
+          } else {
+            j = 6;
+            break;
+          }
+        }
+      }
+
+      p.pop();
+    };
+
+    const weekDays = (p, calendar) => {
+      p.push();
+
+      const daysYellow = [254, 216, 50];
+      const xAlignment = 250;
+      const daysY = calendar.y + 250;
+      p.noStroke();
+      p.fill(...daysYellow);
+      p.circle(
+        (calendar.x + calendar.width - xAlignment) / 3 + 10,
+        daysY - 12,
+        50
+      );
+      p.rect(
+        (calendar.x + calendar.width - xAlignment) / 3 + 10,
+        daysY - 37,
+        (calendar.x + calendar.width - xAlignment) / 3 + 4 * 80,
+        50
+      );
+      p.circle(
+        (calendar.x + calendar.width - xAlignment) / 3 + 14 + 6 * 80,
+        daysY - 12,
+        50
+      );
+
+      p.stroke('black');
+      p.fill(0);
+      p.textSize(40);
+
+      const days = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+      for (let i = 0; i < days.length; i += 1) {
+        p.text(
+          days[i],
+          (calendar.x + calendar.width - xAlignment) / 3 + i * 80,
+          daysY
+        );
+      }
+
+      p.pop();
+    };
+
+    function sketch(p, preloadedResources) {
+      console.log('[calendar-image-generator] Sketch function called');
+      p.setup = () => {
+        try {
+        console.log('[calendar-image-generator] p5.js sketch setup starting...');
+        const canvasWidth = 960;
+        const canvasHeight = 960;
+        const canvas = p.createCanvas(canvasWidth, canvasHeight);
+        const orange = [238, 115, 70];
+        p.background(...orange);
+
+        const blobGraphic = blob(p, -100, -100);
+        p.image(blobGraphic, 0, 0);
+
+        const calendar = {
+          x: 100,
+          y: 100,
+          width: 645,
+          height: 755,
+          borderRaidus: 50,
+        };
+
+        p.stroke(0, 0, 0, 0);
+        p.fill(...brat);
+
+        p.push();
+        const leanByDegrees = -2.8 * (Math.PI / 180);
+        p.rotate(leanByDegrees);
+        p.rect(
+          70,
+          140,
+          calendar.width,
+          calendar.height,
+          calendar.borderRaidus,
+          calendar.borderRaidus,
+          calendar.borderRaidus,
+          calendar.borderRaidus
+        );
+        p.pop();
+
+        const white = 255;
+        p.fill(white);
+        p.rect(
+          calendar.x,
+          calendar.y,
+          calendar.width,
+          calendar.height,
+          calendar.borderRaidus,
+          calendar.borderRaidus,
+          calendar.borderRaidus,
+          calendar.borderRaidus
+        );
+
+        const spiralGraphic = spiral(p, calendar.x + calendar.width, 0);
+        p.image(
+          spiralGraphic,
+          -(canvasWidth / 2) - 300,
+          -50,
+          canvasWidth * 2,
+          canvasHeight * 2
+        );
+
+        const whiteSquigglyGraphic = whiteSquiggly(p, 50, 200);
+        p.image(whiteSquigglyGraphic, -50, calendar.height + 40);
+
+        // Load and display logo if it exists
+        if (fs.existsSync(logoPath)) {
+          try {
+            const logoImage = p.loadImage(logoPath);
+            p.image(
+              logoImage,
+              calendar.width,
+              calendar.height + 25,
+              200,
+              125
+            );
+          } catch (logoError) {
+            console.warn('Could not load or display logo:', logoError.message);
+          }
+        }
+
+        p.noFill();
+
+        title(p, calendar);
+        weekDays(p, calendar);
+        daysGrid(p, calendar, monthEvents);
+
+        // Construct full path - node-p5 saves to current working directory
+        const outputPath = path.join(process.cwd(), 'calendar.png');
+        
+        // Save to file (saveCanvas takes filename without extension)
+        p.saveCanvas(canvas, 'calendar', 'png');
+        console.log('Saving calendar image to:', outputPath);
+        
+        // Wait a bit for file to be written, then check if it exists
+        setTimeout(() => {
+          clearTimeout(timeout); // Clear the main timeout
+          if (fs.existsSync(outputPath)) {
+            console.log('Calendar image saved successfully:', outputPath);
+            resolve(outputPath);
+          } else {
+            console.warn('Calendar image file not found after save, checking alternative locations...');
+            // Try alternative path (might save in __dirname instead of cwd)
+            const altPath = path.join(__dirname, 'calendar.png');
+            if (fs.existsSync(altPath)) {
+              console.log('Found calendar image at alternative path:', altPath);
+              resolve(altPath);
+            } else {
+              clearTimeout(timeout);
+              reject(new Error('Calendar image was not saved. Checked: ' + outputPath + ' and ' + altPath));
+            }
+          }
+        }, 1000); // Wait 1 second for file to be written
+        } catch (setupError) {
+          clearTimeout(timeout);
+          console.error('Error in p5.js setup:', setupError);
+          reject(new Error(`Failed in p5.js setup: ${setupError.message}`));
+        }
+      };
+    }
+
+    try {
+      console.log('[calendar-image-generator] Creating p5.js sketch...');
+      const sketchInstance = p5.createSketch(sketch, {});
+      console.log('[calendar-image-generator] Sketch created, instance:', sketchInstance ? 'exists' : 'null');
+      console.log('[calendar-image-generator] Waiting for setup to be called...');
+    } catch (error) {
+      clearTimeout(timeout);
+      console.error('[calendar-image-generator] Error creating sketch:', error);
+      reject(new Error(`Failed to generate calendar image: ${error.message}`));
+    }
+  });
+}
+
+module.exports = { generateCalendarImage };

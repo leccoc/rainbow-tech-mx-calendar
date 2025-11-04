@@ -1,3 +1,4 @@
+require('dotenv').config();
 const cron = require('node-cron');
 const { loadConfig } = require('./config.js');
 const { BotService } = require('./bot-service.js');
@@ -10,6 +11,7 @@ class CalendarBotApp {
         this.config = null;
         this.botService = null;
         this.cronJob = null;
+        this.periodicCheckInterval = null;
     }
 
     /**
@@ -30,6 +32,9 @@ class CalendarBotApp {
             
             // Set up scheduled task
             this.setupScheduledTask();
+            
+            // Set up periodic check for calendar changes
+            this.setupPeriodicCheck();
             
             // Set up graceful shutdown handlers
             this.setupGracefulShutdown();
@@ -66,6 +71,22 @@ class CalendarBotApp {
     }
 
     /**
+     * Sets up periodic check for calendar changes (every minute)
+     */
+    setupPeriodicCheck() {
+        // Check every minute (60 seconds * 1000 milliseconds)
+        this.periodicCheckInterval = setInterval(async () => {
+            try {
+                await this.botService.checkAndUpdateIfChanged();
+            } catch (error) {
+                console.error('Error in periodic calendar check:', error.message);
+            }
+        }, 60 * 1000);
+        
+        console.log('Periodic calendar check configured (every minute)');
+    }
+
+    /**
      * Sets up graceful shutdown handlers
      */
     setupGracefulShutdown() {
@@ -73,6 +94,12 @@ class CalendarBotApp {
             console.log(`\nReceived ${signal}. Starting graceful shutdown...`);
             
             try {
+                // Stop periodic check
+                if (this.periodicCheckInterval) {
+                    clearInterval(this.periodicCheckInterval);
+                    console.log('Periodic check stopped');
+                }
+                
                 // Stop cron job
                 if (this.cronJob) {
                     this.cronJob.stop();

@@ -33,6 +33,24 @@ async function fetchCalendarData(icsUrl) {
             throw new Error('Invalid calendar data received');
         }
 
+        // Normalize events to extract .value properties from nested objects
+        parsed.events = parsed.events.map(event => {
+            const normalized = {};
+            for (const [key, value] of Object.entries(event)) {
+                if (value && typeof value === 'object' && 'value' in value) {
+                    normalized[key] = value.value;
+                } else {
+                    normalized[key] = value;
+                }
+            }
+            
+            // Map ICS field names to common field names
+            normalized.startDate = normalized.dtstart;
+            normalized.endDate = normalized.dtend;
+            
+            return normalized;
+        });
+
         console.log(`Successfully parsed calendar with ${parsed.events.length} events`);
         return parsed;
         
@@ -75,7 +93,7 @@ function formatEventsForDisplay(events) {
         return '📅 No hay eventos programados para este mes.';
     }
 
-    let formattedEvents = '📅 **Próximos Eventos:**\n\n';
+    let formattedEvents = '';
     
     // Sort events by date
     const sortedEvents = events.sort((a, b) => {
@@ -86,20 +104,22 @@ function formatEventsForDisplay(events) {
 
     sortedEvents.forEach((event, index) => {
         const eventDate = new Date(event.startDate);
-        const dateStr = eventDate.toLocaleDateString('es-ES', {
+        const dateStr = eventDate.toLocaleDateString('es-MX', {
             weekday: 'short',
             month: 'short',
-            day: 'numeric'
+            day: 'numeric',
+            timeZone: 'America/Mexico_City'
         });
         
-        const timeStr = eventDate.toLocaleTimeString('es-ES', {
+        const timeStr = eventDate.toLocaleTimeString('es-MX', {
             hour: 'numeric',
             minute: '2-digit',
-            hour12: false
+            hour12: true,
+            timeZone: 'America/Mexico_City'
         });
 
         formattedEvents += `${index + 1}. **${event.summary || 'Evento sin título'}**\n`;
-        formattedEvents += `   📆 ${dateStr} a las ${timeStr}\n`;
+        formattedEvents += `   - ${dateStr} a las ${timeStr} (CDMX)\n`;
         
         if (event.description) {
             // Truncate long descriptions

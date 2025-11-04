@@ -16,6 +16,7 @@
     "cal-parser": "^1.0.2",
     "dotenv": "^17.2.3",
     "express": "^4.21.1",
+    "googleapis": "^164.1.0",
     "node-cron": "^3.0.3",
     "node-p5": "^1.0.4",
     "node-telegram-bot-api": "^0.66.0"

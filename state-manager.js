@@ -9,7 +9,10 @@ class StateManager {
         this.stateFilePath = stateFilePath;
         this.state = {
             currentPinnedMessageId: null,
-            lastUpdated: null
+            currentImageMessageId: null,
+            lastUpdated: null,
+            lastCheckedMonth: null,
+            lastEventsHash: null
         };
     }
 
@@ -69,6 +72,61 @@ class StateManager {
      */
     clearPinnedMessageId() {
         this.state.currentPinnedMessageId = null;
+    }
+
+    /**
+     * Sets the image message ID
+     * @param {number} messageId - The image message ID to store
+     */
+    setImageMessageId(messageId) {
+        this.state.currentImageMessageId = messageId;
+    }
+
+    /**
+     * Gets the current image message ID
+     * @returns {number|null} Current image message ID
+     */
+    getImageMessageId() {
+        return this.state.currentImageMessageId;
+    }
+
+    /**
+     * Clears the image message ID
+     */
+    clearImageMessageId() {
+        this.state.currentImageMessageId = null;
+    }
+
+    /**
+     * Gets the last checked month (YYYY-MM format)
+     * @returns {string|null} Last checked month
+     */
+    getLastCheckedMonth() {
+        return this.state.lastCheckedMonth;
+    }
+
+    /**
+     * Sets the last checked month
+     * @param {string} month - Month in YYYY-MM format
+     */
+    setLastCheckedMonth(month) {
+        this.state.lastCheckedMonth = month;
+    }
+
+    /**
+     * Gets the last events hash
+     * @returns {string|null} Last events hash
+     */
+    getLastEventsHash() {
+        return this.state.lastEventsHash;
+    }
+
+    /**
+     * Sets the last events hash
+     * @param {string} hash - Events hash
+     */
+    setLastEventsHash(hash) {
+        this.state.lastEventsHash = hash;
     }
 }
 
