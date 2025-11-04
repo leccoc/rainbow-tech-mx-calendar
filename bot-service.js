@@ -80,34 +80,38 @@ class BotService {
                 await this.cleanupPreviousMessage();
             }
             
-            // Create and send new message
+            // Create calendar message content
             const messageContent = await this.calendarService.createCalendarMessage();
-            const newMessage = await this.bot.sendMessage(this.config.chatId, messageContent, {
-                parse_mode: 'Markdown',
-                message_thread_id: this.config.topicId
-            });
-            console.log('Sent calendar message');
             
-            // Generate and send calendar image as separate message
+            // Generate calendar image
+            let imagePath = null;
             try {
                 console.log('Starting calendar image generation...');
-                const imagePath = await this.calendarService.generateCalendarImage();
-                console.log('Image generation completed. Path:', imagePath);
-                if (imagePath) {
-                    console.log('Sending calendar image to Telegram...');
-                    const imageMessage = await this.bot.sendPhoto(this.config.chatId, imagePath, {
-                        message_thread_id: this.config.topicId
-                    });
-                    console.log('✅ Sent calendar image successfully');
-                    // Store image message ID for cleanup
-                    this.stateManager.setImageMessageId(imageMessage.message_id);
-                } else {
-                    console.warn('⚠️ Image generation returned null/undefined');
-                }
+                imagePath = await this.calendarService.generateCalendarImage();
+                console.log('Image generation completed. Path:', imagePath || 'null');
             } catch (imageError) {
-                console.error('❌ Failed to generate or send calendar image:', imageError.message);
-                console.error('Stack trace:', imageError.stack);
-                // Continue even if image generation fails
+                console.error('❌ Failed to generate calendar image:', imageError.message);
+                // Continue with text-only message if image generation fails
+            }
+            
+            // Send image with text as caption (single message)
+            let newMessage;
+            if (imagePath) {
+                console.log('Sending calendar image with text caption...');
+                newMessage = await this.bot.sendPhoto(this.config.chatId, imagePath, {
+                    caption: messageContent,
+                    parse_mode: 'Markdown',
+                    message_thread_id: this.config.topicId
+                });
+                console.log('✅ Sent calendar message with image');
+            } else {
+                // Fallback to text-only message if image generation failed
+                console.log('Sending text-only calendar message (image generation failed)...');
+                newMessage = await this.bot.sendMessage(this.config.chatId, messageContent, {
+                    parse_mode: 'Markdown',
+                    message_thread_id: this.config.topicId
+                });
+                console.log('✅ Sent calendar message (text only)');
             }
             
             // Update state
@@ -200,28 +204,16 @@ class BotService {
     }
 
     /**
-     * Cleans up the previous message and image
+     * Cleans up the previous message (which contains both text and image)
      * @returns {Promise<void>}
      */
     async cleanupPreviousMessage() {
         const currentPinnedId = this.stateManager.getPinnedMessageId();
-        const currentImageId = this.stateManager.getImageMessageId();
         
-        // Delete the old text message
         if (currentPinnedId) {
             try {
                 await this.bot.deleteMessage(this.config.chatId, currentPinnedId);
-                console.log('Deleted previous text message');
-            } catch (error) {
-                // Silently ignore deletion errors (message might have been deleted manually)
-            }
-        }
-        
-        // Delete the old image message
-        if (currentImageId) {
-            try {
-                await this.bot.deleteMessage(this.config.chatId, currentImageId);
-                console.log('Deleted previous image message');
+                console.log('Deleted previous calendar message');
             } catch (error) {
                 // Silently ignore deletion errors (message might have been deleted manually)
             }

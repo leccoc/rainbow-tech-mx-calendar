@@ -28,7 +28,7 @@ class CalendarService {
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();
         
-        let message = `📅 **Calendario - ${monthYear}**\n\n`;
+        let message = `**Calendario - ${monthYear}**\n\n`;
         
         try {
             // Fetch calendar data
