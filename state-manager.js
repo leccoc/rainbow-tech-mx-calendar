@@ -1,6 +1,4 @@
 const fs = require('fs').promises;
-const path = require('path');
-
 /**
  * Manages bot state persistence with async file operations
  */
@@ -9,7 +7,6 @@ class StateManager {
         this.stateFilePath = stateFilePath;
         this.state = {
             currentPinnedMessageId: null,
-            currentImageMessageId: null,
             lastUpdated: null,
             lastCheckedMonth: null,
             lastEventsHash: null
@@ -23,7 +20,13 @@ class StateManager {
     async loadState() {
         try {
             const stateData = await fs.readFile(this.stateFilePath, 'utf8');
-            this.state = JSON.parse(stateData);
+            const parsed = JSON.parse(stateData);
+            this.state = {
+                currentPinnedMessageId: parsed.currentPinnedMessageId ?? null,
+                lastUpdated: parsed.lastUpdated ?? null,
+                lastCheckedMonth: parsed.lastCheckedMonth ?? null,
+                lastEventsHash: parsed.lastEventsHash ?? null
+            };
             console.log('Bot state loaded from file');
             return this.state;
         } catch (error) {
@@ -42,8 +45,12 @@ class StateManager {
      */
     async saveState() {
         try {
-            this.state.lastUpdated = new Date().toISOString();
-            await fs.writeFile(this.stateFilePath, JSON.stringify(this.state, null, 2));
+            const nextState = {
+                ...this.state,
+                lastUpdated: new Date().toISOString()
+            };
+            this.state = nextState;
+            await fs.writeFile(this.stateFilePath, JSON.stringify(nextState, null, 2));
             console.log('Bot state saved to file');
         } catch (error) {
             console.error('Error saving bot state:', error.message);
@@ -72,29 +79,6 @@ class StateManager {
      */
     clearPinnedMessageId() {
         this.state.currentPinnedMessageId = null;
-    }
-
-    /**
-     * Sets the image message ID
-     * @param {number} messageId - The image message ID to store
-     */
-    setImageMessageId(messageId) {
-        this.state.currentImageMessageId = messageId;
-    }
-
-    /**
-     * Gets the current image message ID
-     * @returns {number|null} Current image message ID
-     */
-    getImageMessageId() {
-        return this.state.currentImageMessageId;
-    }
-
-    /**
-     * Clears the image message ID
-     */
-    clearImageMessageId() {
-        this.state.currentImageMessageId = null;
     }
 
     /**
@@ -131,3 +115,4 @@ class StateManager {
 }
 
 module.exports = { StateManager };
+

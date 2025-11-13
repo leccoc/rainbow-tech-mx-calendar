@@ -10,10 +10,6 @@ const p5Middleware = require('./p5.js');
  */
 async function generateCalendarImage(events, outputDir = __dirname) {
   return new Promise((resolve, reject) => {
-    console.log('[calendar-image-generator] Starting image generation...');
-    console.log('[calendar-image-generator] Events count:', events.length);
-    
-    // Set a timeout to detect if sketch hangs
     const timeout = setTimeout(() => {
       reject(new Error('Image generation timed out after 30 seconds'));
     }, 30000);
@@ -51,22 +47,17 @@ async function generateCalendarImage(events, outputDir = __dirname) {
         const altPath = path.join(__dirname, 'calendar.png');
         
         if (fs.existsSync(outputPath)) {
-          console.log('[calendar-image-generator] Calendar image saved successfully:', outputPath);
           clearTimeout(timeout);
           resolve(outputPath);
         } else if (fs.existsSync(altPath)) {
-          console.log('[calendar-image-generator] Found calendar image at alternative path:', altPath);
           clearTimeout(timeout);
           resolve(altPath);
         } else {
-          // Wait a bit more for file to be written
           setTimeout(() => {
             if (fs.existsSync(outputPath)) {
-              console.log('[calendar-image-generator] Calendar image saved successfully (delayed):', outputPath);
               clearTimeout(timeout);
               resolve(outputPath);
             } else if (fs.existsSync(altPath)) {
-              console.log('[calendar-image-generator] Found calendar image at alternative path (delayed):', altPath);
               clearTimeout(timeout);
               resolve(altPath);
             } else {
@@ -79,12 +70,9 @@ async function generateCalendarImage(events, outputDir = __dirname) {
     };
     
     try {
-      console.log('[calendar-image-generator] Calling p5.js middleware...');
       p5Middleware(mockReq, mockRes, mockNext);
-      console.log('[calendar-image-generator] Middleware called, waiting for image...');
     } catch (error) {
       clearTimeout(timeout);
-      console.error('[calendar-image-generator] Error calling middleware:', error);
       reject(new Error(`Failed to generate calendar image: ${error.message}`));
     }
 

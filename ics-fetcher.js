@@ -88,19 +88,60 @@ function filterEventsForMonth(events, year, month) {
  * @param {Array} events - Array of events to format
  * @returns {string} Formatted event list
  */
-function formatEventsForDisplay(events) {
-    if (!events || events.length === 0) {
-        return '📅 No hay eventos programados para este mes.';
+/**
+ * Escapes Markdown special characters for Telegram
+ * @param {string} text - Text to escape
+ * @returns {string} Escaped text
+ */
+function escapeMarkdown(text) {
+    if (!text) return '';
+    // Escape special Markdown characters: _ * [ ] ( ) ` ~
+    return String(text)
+        .replace(/\_/g, '\\_')
+        .replace(/\*/g, '\\*')
+        .replace(/\[/g, '\\[')
+        .replace(/\]/g, '\\]')
+        .replace(/\(/g, '\\(')
+        .replace(/\)/g, '\\)')
+        .replace(/\`/g, '\\`')
+        .replace(/\~/g, '\\~');
+}
+
+/**
+ * Formats description text, converting HTML links and plain URLs to Markdown format
+ * @param {string} description - Description text that may contain HTML links or plain URLs
+ * @returns {string} Formatted description with Markdown links
+ */
+function findFirstUrl(text) {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s<>"')]+)/i;
+    const match = String(text).match(urlRegex);
+    return match ? match[0] : null;
+}
+
+function sanitizeLink(link) {
+    if (!link) return null;
+    try {
+        return new URL(link).toString();
+    } catch (error) {
+        return null;
+    }
+}
+
+function formatEventsForDisplay(events = [], options = {}) {
+    if (!Array.isArray(events) || events.length === 0) {
+        return 'No hay eventos programados para este mes.';
     }
 
-    let formattedEvents = '';
-    
-    // Sort events by date
-    const sortedEvents = events.sort((a, b) => {
+    const { maxEvents = null, maxLength = Infinity } = options;
+
+    const sortedEvents = [...events].sort((a, b) => {
         const dateA = new Date(a.startDate);
         const dateB = new Date(b.startDate);
         return dateA - dateB;
     });
+
+    const sections = [];
 
     sortedEvents.forEach((event, index) => {
         const eventDate = new Date(event.startDate);
@@ -110,29 +151,54 @@ function formatEventsForDisplay(events) {
             day: 'numeric',
             timeZone: 'America/Mexico_City'
         });
-        
-        const timeStr = eventDate.toLocaleTimeString('es-MX', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-            timeZone: 'America/Mexico_City'
-        });
 
-        formattedEvents += `${index + 1}. **${event.summary || 'Evento sin título'}**\n`;
-        formattedEvents += `   - ${dateStr} a las ${timeStr} (CDMX)\n`;
-        
-        if (event.description) {
-            // Truncate long descriptions
-            const description = event.description.length > 100 
-                ? event.description.substring(0, 100) + '...'
-                : event.description;
-            formattedEvents += `   📝 ${description}\n`;
+        const hasTime = eventDate.getHours() !== 0 || eventDate.getMinutes() !== 0;
+        const timeStr = hasTime
+            ? eventDate.toLocaleTimeString('es-MX', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: 'America/Mexico_City'
+            })
+            : null;
+
+        const lines = [];
+        const escapedSummary = escapeMarkdown(event.summary || 'Evento sin título');
+        lines.push(`${index + 1}. ${escapedSummary}`);
+        lines.push(`   Fecha: ${dateStr}${timeStr ? ` a las ${timeStr}` : ''}`);
+
+        const link =
+            sanitizeLink(event.url) ||
+            sanitizeLink(event.htmlLink) ||
+            sanitizeLink(findFirstUrl(event.description)) ||
+            sanitizeLink(findFirstUrl(event.location));
+
+        if (link) {
+            lines.push(`   [Ver más](${link})`);
         }
-        
-        formattedEvents += '\n';
+
+        lines.push('');
+        sections.push(lines);
     });
 
-    return formattedEvents;
+    let limitedSections = sections;
+    if (typeof maxEvents === 'number' && maxEvents > 0) {
+        limitedSections = sections.slice(0, maxEvents);
+    }
+
+    const resultLines = ['**Próximos eventos**', ''];
+
+    for (const section of limitedSections) {
+        for (const line of section) {
+            const candidateLength = [...resultLines, line].join('\n').length;
+            if (candidateLength > maxLength) {
+                return resultLines.join('\n').trimEnd();
+            }
+            resultLines.push(line);
+        }
+    }
+
+    return resultLines.join('\n').trimEnd();
 }
 
 module.exports = {

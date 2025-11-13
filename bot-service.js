@@ -3,9 +3,6 @@ const crypto = require('crypto');
 const { CalendarService } = require('./calendar-service.js');
 const { StateManager } = require('./state-manager.js');
 
-/**
- * Service class for managing Telegram bot operations
- */
 class BotService {
     constructor(config) {
         this.config = config;
@@ -20,23 +17,12 @@ class BotService {
         this.isInitialized = false;
     }
 
-    /**
-     * Initializes the bot and loads state
-     * @returns {Promise<void>}
-     */
     async initialize() {
         try {
             console.log('Initializing bot...');
-            
-            // Load previous state
             await this.stateManager.loadState();
-            
-            // Set up event handlers
             this.setupEventHandlers();
-            
-            // Start polling
             await this.bot.startPolling();
-            
             this.isInitialized = true;
             console.log('Bot initialized successfully');
             
@@ -46,9 +32,6 @@ class BotService {
         }
     }
 
-    /**
-     * Sets up bot event handlers
-     */
     setupEventHandlers() {
         this.bot.on('polling_error', (error) => {
             console.error('Polling error:', error);
@@ -59,74 +42,47 @@ class BotService {
         });
     }
 
-    /**
-     * Updates the calendar message with proper error handling
-     * @returns {Promise<void>}
-     */
-    /**
-     * Updates the calendar message
-     * @param {boolean} shouldDeletePrevious - Whether to delete the previous message (default: true)
-     */
-    async updateCalendarMessage(shouldDeletePrevious = true) {
+    async updateCalendarMessage(shouldDeletePrevious = true, events = null) {
         if (!this.isInitialized) {
             throw new Error('Bot not initialized');
         }
 
         try {
             console.log('Updating calendar message...');
-            
-            // Clean up previous message only if requested
             if (shouldDeletePrevious) {
                 await this.cleanupPreviousMessage();
             }
-            
-            // Create calendar message content
-            const messageContent = await this.calendarService.createCalendarMessage();
-            
-            // Generate calendar image
-            let imagePath = null;
-            try {
-                console.log('Starting calendar image generation...');
-                imagePath = await this.calendarService.generateCalendarImage();
-                console.log('Image generation completed. Path:', imagePath || 'null');
-            } catch (imageError) {
-                console.error('❌ Failed to generate calendar image:', imageError.message);
-                // Continue with text-only message if image generation fails
-            }
-            
-            // Send image with text as caption (single message)
-            let newMessage;
-            if (imagePath) {
-                console.log('Sending calendar image with text caption...');
-                newMessage = await this.bot.sendPhoto(this.config.chatId, imagePath, {
+
+            const monthlyEvents = Array.isArray(events) ? events : await this.calendarService.getCurrentMonthEvents();
+            const messageContent = await this.calendarService.createCalendarMessage(monthlyEvents);
+            const imagePath = await this.calendarService.generateCalendarImage(monthlyEvents);
+
+            let sentMessage;
+            if (imagePath && messageContent.length <= 1024) {
+                sentMessage = await this.bot.sendPhoto(this.config.chatId, imagePath, {
                     caption: messageContent,
                     parse_mode: 'Markdown',
                     message_thread_id: this.config.topicId
                 });
-                console.log('✅ Sent calendar message with image');
             } else {
-                // Fallback to text-only message if image generation failed
-                console.log('Sending text-only calendar message (image generation failed)...');
-                newMessage = await this.bot.sendMessage(this.config.chatId, messageContent, {
+                if (messageContent.length > 4096) {
+                    throw new Error('Calendar message exceeds Telegram message length limit');
+                }
+                sentMessage = await this.bot.sendMessage(this.config.chatId, messageContent, {
                     parse_mode: 'Markdown',
                     message_thread_id: this.config.topicId
                 });
-                console.log('✅ Sent calendar message (text only)');
             }
-            
-            // Update state
-            this.stateManager.setPinnedMessageId(newMessage.message_id);
-            
-            // Track current month (YYYY-MM format)
+
+            this.stateManager.setPinnedMessageId(sentMessage.message_id);
+
             const now = new Date();
             const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             this.stateManager.setLastCheckedMonth(currentMonth);
-            
-            // Update the events hash
-            const monthlyEvents = await this.calendarService.getCurrentMonthEvents();
+
             const currentHash = this.createEventsHash(monthlyEvents);
             this.stateManager.setLastEventsHash(currentHash);
-            
+
             await this.stateManager.saveState();
             
         } catch (error) {
@@ -135,66 +91,46 @@ class BotService {
         }
     }
 
-    /**
-     * Creates a hash of events to detect changes
-     * @param {Array} events - Array of calendar events
-     * @returns {string} Hash of events
-     */
     createEventsHash(events) {
-        // Create a string representation of events for hashing
-        const eventsString = events
+        if (!Array.isArray(events) || events.length === 0) {
+            return '';
+        }
+
+        const payload = events
             .map(event => {
                 const startDate = event.startDate ? new Date(event.startDate).toISOString() : '';
                 const endDate = event.endDate ? new Date(event.endDate).toISOString() : '';
-                const summary = event.summary || '';
-                return `${startDate}|${endDate}|${summary}`;
+                const summary = (event.summary || '').trim();
+                const description = (event.description || '').trim();
+                const location = (event.location || '').trim();
+                return `${startDate}|${endDate}|${summary}|${description}|${location}`;
             })
             .sort()
             .join('||');
-        
-        return crypto.createHash('md5').update(eventsString).digest('hex');
+
+        return crypto.createHash('md5').update(payload).digest('hex');
     }
 
-    /**
-     * Checks if calendar events have changed and updates message if needed
-     * @returns {Promise<boolean>} True if message was updated, false otherwise
-     */
     async checkAndUpdateIfChanged() {
         if (!this.isInitialized) {
             return false;
         }
 
         try {
-            // Get current month events
             const monthlyEvents = await this.calendarService.getCurrentMonthEvents();
-            
-            // Create hash of current events
             const currentHash = this.createEventsHash(monthlyEvents);
             const lastHash = this.stateManager.getLastEventsHash();
-            
-            // Check if events have changed
+
             if (currentHash === lastHash) {
-                // No changes
                 return false;
             }
-            
-            // Events have changed - check if it's a new month
+
             const now = new Date();
             const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             const lastCheckedMonth = this.stateManager.getLastCheckedMonth();
-            
-            // Determine if we should delete previous message
-            // Delete previous only if same month, keep if new month
             const shouldDeletePrevious = (currentMonth === lastCheckedMonth);
-            
-            if (!shouldDeletePrevious) {
-                console.log(`New month detected (${currentMonth}), keeping previous month's message`);
-            } else {
-                console.log(`Events changed in same month (${currentMonth}), updating message`);
-            }
-            
-            // Update the message (this will also update the hash)
-            await this.updateCalendarMessage(shouldDeletePrevious);
+
+            await this.updateCalendarMessage(shouldDeletePrevious, monthlyEvents);
             
             return true;
         } catch (error) {
@@ -203,27 +139,20 @@ class BotService {
         }
     }
 
-    /**
-     * Cleans up the previous message (which contains both text and image)
-     * @returns {Promise<void>}
-     */
     async cleanupPreviousMessage() {
-        const currentPinnedId = this.stateManager.getPinnedMessageId();
-        
-        if (currentPinnedId) {
+        const pinnedId = this.stateManager.getPinnedMessageId();
+
+        if (pinnedId) {
             try {
-                await this.bot.deleteMessage(this.config.chatId, currentPinnedId);
-                console.log('Deleted previous calendar message');
+                await this.bot.deleteMessage(this.config.chatId, pinnedId);
             } catch (error) {
-                // Silently ignore deletion errors (message might have been deleted manually)
+                // ignore
             }
         }
+
+        this.stateManager.setPinnedMessageId(null);
     }
 
-    /**
-     * Gracefully shuts down the bot
-     * @returns {Promise<void>}
-     */
     async shutdown() {
         try {
             console.log('Shutting down bot...');
@@ -233,6 +162,7 @@ class BotService {
             console.error('Error shutting down bot:', error.message);
         }
     }
+
 }
 
 module.exports = { BotService };

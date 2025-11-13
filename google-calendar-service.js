@@ -112,6 +112,7 @@ class GoogleCalendarService {
                 startDate: new Date(startDate),
                 endDate: new Date(endDate),
                 location: event.location || '',
+                url: event.htmlLink || null,
                 organizer: event.organizer ? {
                     email: event.organizer.email,
                     displayName: event.organizer.displayName

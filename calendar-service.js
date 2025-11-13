@@ -1,15 +1,12 @@
 const { fetchCalendarData, filterEventsForMonth, formatEventsForDisplay } = require('./ics-fetcher.js');
 const { GoogleCalendarService } = require('./google-calendar-service.js');
-const { generateCalendarImage } = require('./calendar-image-generator.js');
-const path = require('path');
+const { generateCalendarImage: renderCalendarImage } = require('./calendar-image-generator.js');
 
-/**
- * Service class for managing calendar operations
- */
 class CalendarService {
     constructor(config) {
         this.config = config;
         this.calendarType = config.calendarType || 'ics';
+        this.calendarLink = config.calendarLink;
         
         if (this.calendarType === 'google') {
             this.googleCalendarService = new GoogleCalendarService(config.googleCalendar);
@@ -18,50 +15,29 @@ class CalendarService {
         }
     }
 
-    /**
-     * Creates a formatted calendar message for the current month
-     * @returns {Promise<string>} Formatted calendar message
-     */
-    async createCalendarMessage() {
+    async createCalendarMessage(events) {
+        const monthEvents = Array.isArray(events) ? events : await this.getCurrentMonthEvents();
         const monthYear = this.getCurrentMonthYear();
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        
-        let message = `**Calendario - ${monthYear}**\n\n`;
-        
-        try {
-            // Fetch calendar data
-            let monthlyEvents;
-            if (this.calendarType === 'google') {
-                // Fetch directly for the month from Google Calendar
-                monthlyEvents = await this.googleCalendarService.fetchEventsForMonth(currentYear, currentMonth);
-            } else {
-                // Fetch from ICS and filter
-                const calendarData = await this.fetchCalendarWithTimeout();
-                monthlyEvents = filterEventsForMonth(calendarData.events, currentYear, currentMonth);
-            }
-            
-            // Format events for display
-            const eventsDisplay = formatEventsForDisplay(monthlyEvents);
-            
-            message += eventsDisplay;
-            message += '\n';
-            
-        } catch (error) {
-            console.error('Error creating calendar message:', error.message);
-            // Don't throw error, just return message without events
-            message += '📅 No se pudieron cargar eventos para este mes.\n\n';
+        const calendarLink = this.calendarLink || 'https://calendar.google.com/calendar/u/1?cid=cmFpbmJvd3RlY2gubXhAZ21haWwuY29t';
+        const header = `👉 **[Calendario - ${monthYear}](${calendarLink})**`;
+
+        if (!monthEvents || monthEvents.length === 0) {
+            return `${header}\n\nNo hay eventos programados para este mes.`.trim();
         }
-        
-        return message;
+
+        const headerLength = header.length + 2; // include spacing for "\n\n"
+        const maxCaptionLength = 1024 - headerLength;
+        const body = formatEventsForDisplay(monthEvents, { maxLength: Math.max(maxCaptionLength, 0) });
+        const message = `${header}\n\n${body}`.trim();
+
+        if (message.length <= 1024) {
+            return message;
+        }
+
+        const adjustedBody = formatEventsForDisplay(monthEvents, { maxLength: Math.max(maxCaptionLength - 50, 0) });
+        return `${header}\n\n${adjustedBody}`.trim().slice(0, 1024);
     }
 
-    /**
-     * Fetches calendar data with timeout (ICS only)
-     * @param {number} timeoutMs - Timeout in milliseconds (default: 10000)
-     * @returns {Promise<Object>} Calendar data
-     */
     async fetchCalendarWithTimeout(timeoutMs = 10000) {
         const timeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Calendar fetch timeout')), timeoutMs);
@@ -72,10 +48,6 @@ class CalendarService {
         return Promise.race([fetchPromise, timeoutPromise]);
     }
 
-    /**
-     * Gets current month and year in Spanish
-     * @returns {string} Formatted month and year
-     */
     getCurrentMonthYear() {
         const now = new Date();
         const months = [
@@ -85,17 +57,13 @@ class CalendarService {
         return `${months[now.getMonth()]} ${now.getFullYear()}`;
     }
 
-    /**
-     * Gets current month's events as an array
-     * @returns {Promise<Array>} Array of events for current month
-     */
     async getCurrentMonthEvents() {
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();
         
         try {
-            let monthlyEvents;
+            let monthlyEvents = [];
             if (this.calendarType === 'google') {
                 monthlyEvents = await this.googleCalendarService.fetchEventsForMonth(currentYear, currentMonth);
             } else {
@@ -109,28 +77,20 @@ class CalendarService {
         }
     }
 
-    /**
-     * Generates calendar image using p5.js
-     * @returns {Promise<string|null>} Path to generated image or null if generation fails
-     */
-    async generateCalendarImage() {
+    async generateCalendarImage(events) {
         try {
-            console.log('Getting current month events for image generation...');
-            // Get current month events
-            const monthlyEvents = await this.getCurrentMonthEvents();
-            console.log(`Found ${monthlyEvents.length} events for current month`);
-            
-            // Generate image
-            console.log('Calling generateCalendarImage function...');
-            const imagePath = await generateCalendarImage(monthlyEvents, __dirname);
-            console.log('generateCalendarImage returned:', imagePath);
-            return imagePath;
+            const monthEvents = Array.isArray(events) ? events : await this.getCurrentMonthEvents();
+            if (!monthEvents || monthEvents.length === 0) {
+                return null;
+            }
+
+            return await renderCalendarImage(monthEvents, __dirname);
         } catch (error) {
-            console.error('❌ Error generating calendar image:', error.message);
-            console.error('Stack trace:', error.stack);
+            console.error('Error generating calendar image:', error.message);
             return null;
         }
     }
 }
 
 module.exports = { CalendarService };
+

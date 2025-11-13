@@ -41,7 +41,8 @@ function loadConfig() {
         chatId: process.env.TELEGRAM_GROUP_ID,
         topicId: process.env.TELEGRAM_TOPIC_ID,
         schedule: process.env.CALENDAR_SCHEDULE || '0 9 1 * *',
-        stateFile: path.join(__dirname, 'bot-state.json')
+        stateFile: path.join(__dirname, 'bot-state.json'),
+        calendarLink: process.env.CALENDAR_LINK || 'https://calendar.google.com/calendar/u/1?cid=cmFpbmJvd3RlY2gubXhAZ21haWwuY29t'
     };
 
     // Add calendar-specific configuration
@@ -74,3 +75,4 @@ function loadConfig() {
 }
 
 module.exports = { loadConfig };
+
